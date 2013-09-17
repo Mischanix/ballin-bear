@@ -2,15 +2,24 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Reflection;
 
 using PegasusUtil;
+using BobNetProto;
 
 namespace Our {
-  // When life gives you lemons, burn life's house down... and implement your
-  // own server.
-  class BattleNetMock : IBattleNet {
+  /// <summary>
+  /// Don't worry; it gets worse.
+  /// </summary>
+  class BattleNetMock : IBattleNet, IConnectionListener<PegasusPacket> {
+    ServerConnection<PegasusPacket> gameServer;
     public BattleNetMock() {
       outPackets = new Queue<PegasusPacket>();
+      queueEvents = new Queue<BattleNet.QueueEvent>();
+      gameQueue = new Queue<PegasusPacket>();
+      gameServer = new ServerConnection<PegasusPacket>();
+      gameServer.Open(1227);
+
     }
 
     #region Stateful global shit
@@ -22,12 +31,38 @@ namespace Our {
       Util.Log("BattleNetMock Init");
       DebugConsole.Get().Init();
       initialized = ConnectAPI.ConnectInit();
+
       return initialized;
     }
 
+    ClientConnection<PegasusPacket> gameClient;
     public void ProcessAurora() {
-      // meant to be called on ticks to dequeue packets?
-      // idk, we'll see if it's necessary.  Seems very stateful though.
+      if (gameClient != null && gameClient.Active) {
+        gameClient.Update();
+        return;
+      }
+      gameClient = gameServer.GetNextAcceptedConnection();
+      if (gameClient == null)
+        return;
+
+      gameClient.AddListener(this, gameQueue);
+      gameClient.StartReceiving();
+      var onDisconnect = new ClientConnection<PegasusPacket>.OnDisconectHandler(OnDisconnect);
+      gameClient.SetOnDisconnectHandler(onDisconnect);
+      Util.Log("Game server accepted connection");
+      gameClient.Update();
+    }
+
+    void OnDisconnect(BattleNetErrors e) {
+      Util.Log("OnDisconnect = {0}", e);
+    }
+
+    Queue<PegasusPacket> gameQueue;
+    public void PacketReceived(PegasusPacket p, object state) {
+      Util.Log("PacketReceived = {0}, {1}", p.Type, BitConverter.ToString((byte[])p.Body));
+      // gameQueue.Enqueue(p);
+
+      MockGameServer.OnPacket(gameClient, p.Type, (byte[])p.Body);
     }
 
     public int BattleNetStatus() {
@@ -129,9 +164,12 @@ namespace Our {
     public void ClearErrors() {
     }
     #endregion
-    #region Game event queue
+    #region matchmaking
+    Queue<BattleNet.QueueEvent> queueEvents;
     public BattleNet.QueueEvent GetQueueEvent() {
-      // This seems like one of the more core events.
+      if (queueEvents.Count > 0) {
+        return queueEvents.Dequeue();
+      }
       return null;
     }
     #endregion
@@ -210,6 +248,16 @@ namespace Our {
           Util.Log("OpenBooster = {0}", openBooster);
           outPackets.Enqueue(MockResponse.OnOpenBooster());
           break;
+        case 239:
+          var setOptions = SetOptions.ParseFrom(bytes);
+          Util.Log("SetOptions = {0}", setOptions);
+          // outPackets.Enqueue(MockResponse.OnSetOptions(setOptions));
+          break;
+        case 279:
+          var purchaseWithGold = PurchaseWithGold.ParseFrom(bytes);
+          Util.Log("PurchaseWithGold = {0}", purchaseWithGold);
+          outPackets.Enqueue(MockResponse.OnPurchaseViaGold(purchaseWithGold));
+          break;
         default:
           Util.Log(" ^^^ Unimplemented response ^^^ ");
           break;
@@ -219,7 +267,22 @@ namespace Our {
     #region Missions
     public void StartScenario(int scenario, long deckID) {
       Util.Log("StartScenario = {0}, {1}", scenario, deckID);
-      throw new NotImplementedException(); // Because games
+
+      queueEvents.Enqueue(new BattleNet.QueueEvent(BattleNet.QueueEvent.Type.QUEUE_ENTER));
+      queueEvents.Enqueue(new BattleNet.QueueEvent(BattleNet.QueueEvent.Type.QUEUE_GAME_STARTED, 0, 0, 0,
+        new BattleNet.GameServerInfo {
+          Address = "127.0.0.1",
+          AuroraPassword = "",
+          ClientHandle = 0xcc,
+          GameHandle = 0xdd,
+          Port = 1227,
+          Version = "I'm a pretty princess"
+        }));
+      // on that new connection, 114:GameStarting
+      // ConnectAPI.s_gameServer needs to be replaced with a non-networked
+      // instance of ClientConnection<>, or use ServerConnection<>.
+      // ClientConnection<> is totally not sealed though and I feel like that's
+      // a useful thing.
     }
 
     public void StartScenarioAI(int scenario, long deckID, long aiDeckID) {
@@ -227,94 +290,76 @@ namespace Our {
       throw new NotImplementedException();
     }
     #endregion
-    public void AcceptPartyInvite(ref BattleNet.DllEntityId partyId)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void AnswerChallenge(ulong challengeID, string answer)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void CancelChallenge(ulong challengeID)
-        {
-            throw new NotImplementedException();
-        }
-
-        public bool CheckWebAuth(out string url)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void CloseAurora()
-        {
-            throw new NotImplementedException();
-        }
-
-        public void DeclinePartyInvite(ref BattleNet.DllEntityId partyId)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void DraftQueue(bool join)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void MakeMatch(long deckID, bool newbie)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void ManageFriendInvite(int action, ulong inviteId)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void ProvideWebAuthToken(string token)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void QueryAurora()
-        {
-            throw new NotImplementedException();
-        }
-
-        public void RemoveFriend(ref BnetAccountId account)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void RescindPartyInvite(ref BattleNet.DllEntityId partyId)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void SendFriendInvite(string inviter, string invitee, bool byEmail)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void SendPartyInvite(ref BattleNet.DllEntityId gameAccount)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void SendWhisper(BnetGameAccountId gameAccount, string message)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void SetPartyDeck(ref BattleNet.DllEntityId partyId, long deckID)
-        {
-            throw new NotImplementedException();
-        }
-
-        public void UnrankedMatch(long deckID, bool newbie)
-        {
-            throw new NotImplementedException();
-        }
+    public void AcceptPartyInvite(ref BattleNet.DllEntityId partyId) {
+      throw new NotImplementedException();
     }
+
+    public void AnswerChallenge(ulong challengeID, string answer) {
+      throw new NotImplementedException();
+    }
+
+    public void CancelChallenge(ulong challengeID) {
+      throw new NotImplementedException();
+    }
+
+    public bool CheckWebAuth(out string url) {
+      throw new NotImplementedException();
+    }
+
+    public void CloseAurora() {
+      throw new NotImplementedException();
+    }
+
+    public void DeclinePartyInvite(ref BattleNet.DllEntityId partyId) {
+      throw new NotImplementedException();
+    }
+
+    public void DraftQueue(bool join) {
+      throw new NotImplementedException();
+    }
+
+    public void MakeMatch(long deckID, bool newbie) {
+      throw new NotImplementedException();
+    }
+
+    public void ManageFriendInvite(int action, ulong inviteId) {
+      throw new NotImplementedException();
+    }
+
+    public void ProvideWebAuthToken(string token) {
+      throw new NotImplementedException();
+    }
+
+    public void QueryAurora() {
+      throw new NotImplementedException();
+    }
+
+    public void RemoveFriend(ref BnetAccountId account) {
+      throw new NotImplementedException();
+    }
+
+    public void RescindPartyInvite(ref BattleNet.DllEntityId partyId) {
+      throw new NotImplementedException();
+    }
+
+    public void SendFriendInvite(string inviter, string invitee, bool byEmail) {
+      throw new NotImplementedException();
+    }
+
+    public void SendPartyInvite(ref BattleNet.DllEntityId gameAccount) {
+      throw new NotImplementedException();
+    }
+
+    public void SendWhisper(BnetGameAccountId gameAccount, string message) {
+      throw new NotImplementedException();
+    }
+
+    public void SetPartyDeck(ref BattleNet.DllEntityId partyId, long deckID) {
+      throw new NotImplementedException();
+    }
+
+    public void UnrankedMatch(long deckID, bool newbie) {
+      throw new NotImplementedException();
+    }
+  }
 }

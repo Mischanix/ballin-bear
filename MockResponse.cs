@@ -58,7 +58,7 @@ namespace Our {
     static PegasusPacket CampaignInfoReply() {
       var builder = ProfileProgress.CreateBuilder();
       builder.SetBestForge(0)
-        .SetProgress((long)MissionMgr.MissionProgress.ALL_TUTORIALS_COMPLETE);
+        .SetProgress((long)MissionMgr.MissionProgress.NOTHING_COMPLETE);
       var buf = Util.AsArray(builder.Build());
       return new PegasusPacket(233, buf.Length, buf);
     }
@@ -173,6 +173,28 @@ namespace Our {
     public static PegasusPacket OnGetBattlePayConfig() {
       var builder = BattlePayConfigResponse.CreateBuilder();
       builder.SetCurrency((int)Currency.USD);
+      // Booster test
+      builder.AddBundles(Bundle.CreateBuilder()
+        .SetCost(0.99)
+        .SetData(1)
+        .SetProduct((int)ProductType.BOOSTER)
+        .SetQuantity(1)
+        .SetType(0));
+      builder.AddGoldPrices(GoldPrice.CreateBuilder()
+        .SetCost(150)
+        .SetData(1)
+        .SetProduct((int)ProductType.BOOSTER));
+      // Draft test
+      builder.AddBundles(Bundle.CreateBuilder()
+        .SetCost(1.99)
+        .SetData(0)
+        .SetProduct((int)ProductType.DRAFT_TICKET)
+        .SetQuantity(1)
+        .SetType(1));
+      builder.AddGoldPrices(GoldPrice.CreateBuilder()
+        .SetCost(150)
+        .SetData(0)
+        .SetProduct((int)ProductType.DRAFT_TICKET));
       var buf = Util.AsArray(builder.Build());
       return new PegasusPacket(238, buf.Length, buf);
     }
@@ -188,7 +210,10 @@ namespace Our {
     public static PegasusPacket OnOpenBooster() {
       var builder = BoosterContent.CreateBuilder();
 
-      var allCards = Util.AllCollectibles().Where(n => n.CardType != TAG_CARDTYPE.HERO).ToList();
+      var allCards = Util.AllCollectibles().Where(
+        n => n.CardType != TAG_CARDTYPE.HERO &&
+          DefLoader.Get().GetEntityDef(n.CardID).GetCardSet() == TAG_CARD_SET.EXPERT1
+        ).ToList();
       var r = new Random();
       for (var n = allCards.Count; n > 1;) {
         n--;
@@ -218,6 +243,14 @@ namespace Our {
 
       var buf = Util.AsArray(builder.Build());
       return new PegasusPacket(226, buf.Length, buf);
+    }
+
+    public static PegasusPacket OnPurchaseViaGold(PurchaseWithGold purchaseWithGold) {
+      var builder = PurchaseWithGoldResponse.CreateBuilder()
+        .SetGoldUsed(150)
+        .SetResult(PurchaseWithGoldResponse.Types.PurchaseResult.PR_SUCCESS);
+      var buf = Util.AsArray(builder.Build());
+      return new PegasusPacket(280, buf.Length, buf);
     }
   }
 }
