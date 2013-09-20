@@ -41,20 +41,16 @@ namespace Our {
         gameClient.Update();
         return;
       }
-      gameClient = gameServer.GetNextAcceptedConnection();
-      if (gameClient == null)
+      var conn = gameServer.GetNextAcceptedConnection();
+      if (conn == null)
         return;
+      gameClient = conn;
 
       gameClient.AddListener(this, gameQueue);
       gameClient.StartReceiving();
-      var onDisconnect = new ClientConnection<PegasusPacket>.OnDisconectHandler(OnDisconnect);
-      gameClient.SetOnDisconnectHandler(onDisconnect);
+      gameClient.SetOnDisconnectHandler((e) => Util.Log("OnDisconnect = {0}", e));
       Util.Log("Game server accepted connection");
       gameClient.Update();
-    }
-
-    void OnDisconnect(BattleNetErrors e) {
-      Util.Log("OnDisconnect = {0}", e);
     }
 
     Queue<PegasusPacket> gameQueue;

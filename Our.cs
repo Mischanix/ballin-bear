@@ -38,6 +38,7 @@ public class OurMono : MonoBehaviour {
     if (doIt) {
       doIt = false;
       Debug.LogWarning("LogWarning test");
+      t.Dispose();
     }
 
 

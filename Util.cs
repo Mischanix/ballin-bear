@@ -78,7 +78,7 @@ namespace Our {
       var cardType = typeof(Network).Assembly.GetType("CardManifest+Card", true);
       var singleton = cardManifestType.GetField("s_cardManifest", BindingFlags.NonPublic | BindingFlags.Static).GetValue(null);
       var result = cardManifestType.GetMethod("AllCollectibles").Invoke(singleton, null);
-      
+
       var cardList = new List<Card>();
       var cardArraySize = (int)typeof(List<>).MakeGenericType(cardType).GetProperty("Count").GetValue(result, null);
       var elementAt = typeof(Enumerable).GetMethod("ElementAt").MakeGenericMethod(cardType);
@@ -91,7 +91,7 @@ namespace Our {
         card.CardType = (TAG_CARDTYPE)cardType.GetProperty("CardType").GetValue(cardElem, null);
         cardList.Add(card);
       }
-      var cardArray = typeof(List<>).MakeGenericType(cardType).GetMethod("ToArray").Invoke(result, null);
+      // var cardArray = typeof(List<>).MakeGenericType(cardType).GetMethod("ToArray").Invoke(result, null);
       return cardList;
     }
     #endregion
